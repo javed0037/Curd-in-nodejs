@@ -1,85 +1,112 @@
-var express = require('express');
-var app = express();
-var mongoose = require('mongoose');
-var user = require('./models/users');
-var bodyParser = require('body-parser');
-var bcrypt = require('bcrypt');
-var express = require('express');
-var jwt = require('jsonwebtoken');
-app.use(bodyParser.urlencoded({ extended: false }))
- // parse application/json
-app.use(bodyParser.json())
-mongoose.connect('mongodb://localhost/SignUp');
+const express = require('express');
+const app = express();
+const bodyParser = require('body-parser');
+const user = require('./models/users');
+const mongoose = require('mongoose');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 
-app.post('/LoginUser',function(req,res){
-  let email = req.body.email;
-  user.findOne({email:email},function(err ,data){
+// parse application/x-www-form-urlencoded
+app.use(bodyParser.urlencoded({ extended: false }));
+
+// parse application/json
+app.use(bodyParser.json());
+
+mongoose.connect('mongodb://localhost/feboneDB');
+
+
+
+
+app.post('/user', function(req, res){
+    bcrypt.hash(req.body.Password, 9 ,function(err, hash){
         if(err){
-          return res.json({
-            message : 'not ccorrect email'
-          })
+            return res.json(err)
         }
-        if(data){
-                bcrypt.compare(req.body.password,data.password ,function(err,data){
-                  if(data){
-                      var Admin1 ={
-                        email : data.name
-                      };
-                      var token = jwt.sign({Admin1},'javed',{expiresInMinutes: 1440});
-                      // return the information including token as JSON
-                      res.json({
-                        success: true,
-                        message: 'Enjoy your token!',
-                        token: token
-                      });
-                  }
-              })
-           }
-     })
+        let userCriteria = {
+            Name : req.body.Name,
+            Email : req.body.Email,
+            Password : hash
+        };
+        user.create(userCriteria, function(err, record){
+            if(err){
+                return res.json(err)
+            }
+            return res.json(record)
+        });
+    });
 });
 
-app.post('/CreateUser',function(req,res){
-  let name = req.body.name;
-  let password = req.body.password;
-  let email = req.body.email;
-  if(name && password && email){
-    bcrypt.hash(password , 10 ,function(err,hash){
-      if(err){
-       return res.json({
-         message : 'password not bcypt'
-       })
-      }
-    var userObj = {
-    name : name,
-    password :hash,
-    email : email
-    }
-    user.create(userObj,function(err,data){
-      if(err) {
-            res.json({
-              message : 'data not entered sucessfully',
-              status: 400
+app.post('/login', function(req, res){
+    let userCriteria = {
+        Email : req.body.Email
+    };
+    user.findOne(userCriteria, function(err, record){
+        if(err){
+            return res.json(err)
+            }
+        if(record)
+        {
+            bcrypt.compare(req.body.Password,record.Password,(err,result)=>{
+                if(result){
+                    var token = jwt.sign({id: user._id}, "name", { expiresIn: 86400 });
+                    // return res.json(record)
+                    return res.json({ auth: true, token: token })
+                }
+                return res.json(err)
             })
-          }
-            if(data){
-              return  res.json({
-                  status:200,
-                  message : 'information entered sucessfully',
-                  data : data
-                })
-            }
-            else{
-              return res.json({
-                message :'you have entered wrong info',
-                data :data,
-                status : 400
-              })
-            }
-      });
-   })
-  }
+        }
+    });
 });
 
-app.listen(8081,()=> {
-  console.log('listening on prot :8081')
+app.get('/user', function(req, res){
+    user.find({}, function(err, record){
+        if(err){
+            return res.json(err)
+        }
+        return res.json(record)
+    });
 });
+
+app.get('/userver', function(req, res) {
+    var token = req.headers['token'];
+    jwt.verify(token, "name", function(err, decoded) {
+      if (err) return res.json(err);
+      return res.json(decoded);
+    });
+  });
+
+
+app.put('/user', function(req, res){
+    let preCriteria = req.body.ID;
+    let criteria = {
+        _id  : preCriteria
+    }
+    let updatedRecords = {
+        Name : req.body.Name,
+        Email : req.body.Email,
+        Password : req.body.Password
+    };
+    user.update( criteria, updatedRecords, function(err, record){
+        if(err){
+            return res.json(err)
+        }
+        return res.json(record)
+    })
+});
+
+app.delete('/user', function(req, res){
+    let preCriteria = req.body.ID;
+    let criteria = {
+        _id  : preCriteria
+    }
+    user.remove( criteria, function(err, record){
+        if(err){
+            return res.json(err)
+        }
+        return res.json(record)
+    })
+});
+
+
+
+app.listen(8000, function(req,res){console.log("App Running on Port 8000")});
